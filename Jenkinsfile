@@ -181,8 +181,7 @@ Build URL: ${env.BUILD_URL}
 
 The build log is attached.
 """,
-                to: "${env.FAILURE_TO}",
-                cc: "${env.FAILURE_CC}",
+                to: "${env.FAILURE_TO}, cc:${env.FAILURE_CC}",
                 recipientProviders: [developers(), culprits()],
                 attachLog: true,
                 compressLog: true
