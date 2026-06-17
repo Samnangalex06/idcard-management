@@ -9,8 +9,8 @@
     db_user: root
     db_password: "Hello@123"
     db_host: mysql
-    backup_dir: /app/backups
-    backup_file: /app/backups/backup.sql
+    backup_dir: /tmp/idcard-management-backups
+    backup_file: /tmp/idcard-management-backups/backup.sql
     local_backup_file: artifacts/backup.sql
     java_home: /opt/java/openjdk
 
@@ -37,26 +37,6 @@
     - name: Show git pull result
       debug:
         var: git_pull.stdout_lines
-
-    - name: Apply local Maven configuration after pull
-      copy:
-        src: ../pom.xml
-        dest: "{{ app_dir }}/pom.xml"
-
-    - name: Apply fixed HomeController after pull
-      copy:
-        src: ../src/main/java/com/example/idcard_management/controller/HomeController.java
-        dest: "{{ app_dir }}/src/main/java/com/example/idcard_management/controller/HomeController.java"
-
-    - name: Ensure test resources directory exists
-      file:
-        path: "{{ app_dir }}/src/test/resources"
-        state: directory
-
-    - name: Apply SQLite test profile after pull
-      copy:
-        src: ../src/test/resources/application-test.properties
-        dest: "{{ app_dir }}/src/test/resources/application-test.properties"
 
     - name: Build project using Maven
       command: mvn clean package -DskipTests
