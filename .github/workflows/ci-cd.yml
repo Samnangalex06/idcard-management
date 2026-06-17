@@ -1,0 +1,85 @@
+name: Build Test And Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-test-deploy:
+    name: Build, Test, Deploy
+    runs-on:
+      - self-hosted
+      - linux
+
+    env:
+      SPRING_PROFILES_ACTIVE: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Verify database profiles
+        run: |
+          mkdir -p gha-output
+          grep -q 'jdbc:mysql' src/main/resources/application.properties
+          grep -q 'jdbc:sqlite' src/test/resources/application-test.properties
+          {
+            echo 'Production DB: MySQL'
+            grep 'spring.datasource.url' src/main/resources/application.properties
+            echo 'Test DB: SQLite'
+            grep 'spring.datasource.url' src/test/resources/application-test.properties
+          } | tee gha-output/db-profile-check.log
+
+      - name: Build with Maven
+        run: |
+          mvn -B clean package -DskipTests 2>&1 | tee gha-output/build-output.log
+
+      - name: Test with SQLite
+        run: |
+          SPRING_PROFILES_ACTIVE=test mvn -B test -Dspring.profiles.active=test 2>&1 | tee gha-output/test-output.log
+
+      - name: Deploy with Ansible
+        run: |
+          ansible-playbook -i ansible/inventory.ini ansible/web-deploy.yml 2>&1 | tee gha-output/ansible-deploy-output.log
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-actions-build-output
+          path: |
+            gha-output/**
+            target/*.jar
+            target/surefire-reports/**
+            artifacts/backup.sql
+          if-no-files-found: ignore
+
+      - name: Email failure notice
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "GitHub Actions failed: ${{ github.repository }} #${{ github.run_number }}"
+          to: ${{ github.event.head_commit.author.email }}
+          cc: srengty@gmail.com
+          from: ${{ secrets.SMTP_USERNAME }}
+          body: |
+            GitHub Actions build failed.
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Commit author: ${{ github.event.head_commit.author.name }} <${{ github.event.head_commit.author.email }}>
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
