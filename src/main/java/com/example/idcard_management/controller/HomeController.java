@@ -1,4 +1,4 @@
-﻿package com.example.idcard_management.controller;
+package com.example.idcard_management.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;

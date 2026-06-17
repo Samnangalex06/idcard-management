@@ -1,0 +1,127 @@
+---
+- name: Deploy Spring Boot app and backup MySQL database
+  hosts: CHOICE_A
+  become: false
+
+  vars:
+    app_dir: /app
+    db_name: "B-Sam_Nangalex-db"
+    db_user: root
+    db_password: "Hello@123"
+    db_host: mysql
+    backup_dir: /app/backups
+    backup_file: /app/backups/backup.sql
+    local_backup_file: artifacts/backup.sql
+    java_home: /opt/java/openjdk
+
+  tasks:
+    - name: Check current project status
+      command: git status --porcelain
+      args:
+        chdir: "{{ app_dir }}"
+      register: git_status
+      changed_when: false
+
+    - name: Stop if local changes exist
+      fail:
+        msg: "Local changes exist in /app. Commit or reset them before git pull."
+      when: git_status.stdout != ""
+
+    - name: Pull latest code from Git
+      command: git pull --ff-only
+      args:
+        chdir: "{{ app_dir }}"
+      register: git_pull
+      changed_when: "'Already up to date.' not in git_pull.stdout"
+
+    - name: Show git pull result
+      debug:
+        var: git_pull.stdout_lines
+
+    - name: Apply local Maven configuration after pull
+      copy:
+        src: ../pom.xml
+        dest: "{{ app_dir }}/pom.xml"
+
+    - name: Apply fixed HomeController after pull
+      copy:
+        src: ../src/main/java/com/example/idcard_management/controller/HomeController.java
+        dest: "{{ app_dir }}/src/main/java/com/example/idcard_management/controller/HomeController.java"
+
+    - name: Ensure test resources directory exists
+      file:
+        path: "{{ app_dir }}/src/test/resources"
+        state: directory
+
+    - name: Apply SQLite test profile after pull
+      copy:
+        src: ../src/test/resources/application-test.properties
+        dest: "{{ app_dir }}/src/test/resources/application-test.properties"
+
+    - name: Build project using Maven
+      command: mvn clean package -DskipTests
+      args:
+        chdir: "{{ app_dir }}"
+      environment:
+        JAVA_HOME: "{{ java_home }}"
+        PATH: "{{ java_home }}/bin:{{ ansible_env.PATH }}"
+      register: maven_build
+
+    - name: Show Maven build result
+      debug:
+        var: maven_build.stdout_lines
+
+    - name: Run tests using SQLite test profile
+      command: mvn test -Dspring.profiles.active=test
+      args:
+        chdir: "{{ app_dir }}"
+      environment:
+        JAVA_HOME: "{{ java_home }}"
+        PATH: "{{ java_home }}/bin:{{ ansible_env.PATH }}"
+        SPRING_PROFILES_ACTIVE: test
+      register: maven_test
+      changed_when: false
+
+    - name: Show Maven test result
+      debug:
+        var: maven_test.stdout_lines
+
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+
+    - name: Backup MySQL database
+      shell: |
+        set -o pipefail
+        MYSQL_PWD='{{ db_password }}' mysqldump \
+          -h {{ db_host }} \
+          -u {{ db_user }} \
+          --single-transaction \
+          --routines \
+          --triggers \
+          --databases '{{ db_name }}' > {{ backup_file }}
+      args:
+        chdir: "{{ app_dir }}"
+        executable: /bin/bash
+      register: mysql_backup
+      no_log: true
+
+    - name: Upload backup.sql file to Ansible control machine
+      fetch:
+        src: "{{ backup_file }}"
+        dest: "{{ local_backup_file }}"
+        flat: true
+
+    - name: Show backup file
+      command: ls -lh {{ backup_file }}
+      register: backup_files
+      changed_when: false
+
+    - name: Show backup file result
+      debug:
+        var: backup_files.stdout_lines
+
+    - name: Paste command to test using SQLite test database
+      debug:
+        msg: "cd {{ app_dir }} && SPRING_PROFILES_ACTIVE=test mvn test -Dspring.profiles.active=test"

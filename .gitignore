@@ -41,3 +41,5 @@ uploads/
 
 .env
 application-local.properties
+.m2-docker/
+artifacts/
