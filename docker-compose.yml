@@ -1,0 +1,28 @@
+services:
+  web:
+    build: .
+    container_name: spring-web
+    ports:
+      - "8443:8080"
+      - "2222:22"
+    depends_on:
+      - mysql
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/B-Sam_Nangalex-db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: Hello@123
+
+  mysql:
+    image: mysql:8.4
+    container_name: spring-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Hello@123
+      MYSQL_DATABASE: B-Sam_Nangalex-db
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
