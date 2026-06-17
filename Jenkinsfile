@@ -154,7 +154,10 @@ pipeline {
                         '''
                     } else {
                         powershell '''
-                            $wslWorkspace = (wsl wslpath -a "$env:WORKSPACE").Trim()
+                            $workspace = $env:WORKSPACE
+                            $drive = $workspace.Substring(0, 1).ToLower()
+                            $path = $workspace.Substring(2).Replace('\\', '/')
+                            $wslWorkspace = "/mnt/$drive$path"
                             wsl bash -lc "cd '$wslWorkspace' && ansible-playbook -i ansible/inventory.ini ansible/web-deploy.yml" `
                               2>&1 | Tee-Object -FilePath jenkins-output/ansible-deploy-output.log
                             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
